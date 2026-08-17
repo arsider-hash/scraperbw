@@ -10,6 +10,7 @@ ScraperAudioProcessor::ScraperAudioProcessor()
     formats.registerBasicFormats();
     sequencer.regenerate (1, 0.45f);
     publishPattern();
+    for (int i = 0; i <= 16; ++i) displayedSlicePositions[static_cast<size_t> (i)].store (i / 16.0f);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ScraperAudioProcessor::makeLayout()
@@ -37,6 +38,9 @@ void ScraperAudioProcessor::publishPendingSample() noexcept
     // pendingSample and is reclaimed by the loader thread on the next decode.
     std::swap (activeSample, pendingSample);
     sliceBounds = pendingBounds;
+    const auto sampleCount = std::max (1, activeSample.getNumSamples());
+    for (int i = 0; i <= 16; ++i)
+        displayedSlicePositions[static_cast<size_t> (i)].store (static_cast<float> (sliceBounds[static_cast<size_t> (i)]) / sampleCount, std::memory_order_release);
     pendingReady.store (false, std::memory_order_release);
     pendingLock.exit();
 }
@@ -80,6 +84,23 @@ void ScraperAudioProcessor::publishPattern() noexcept
 void ScraperAudioProcessor::processBlock (juce::AudioBuffer<float>& out, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals; out.clear(); publishPendingSample();
+    const bool sequenceEnabled = parameters.getRawParameterValue (ids::sequence)->load() >= 0.5f;
+    if (sequenceEnabled != lastSequenceEnabled)
+    {
+        playing = false;
+        sequencer.reset();
+        lastSequenceEnabled = sequenceEnabled;
+    }
+    const int movedMarker = sliceMoveIndex.exchange (-1, std::memory_order_acq_rel);
+    if (movedMarker > 0 && movedMarker < 16 && activeSample.getNumSamples() > 0)
+    {
+        const int requested = static_cast<int> (sliceMovePosition.load (std::memory_order_acquire) * activeSample.getNumSamples());
+        sliceBounds[static_cast<size_t> (movedMarker)] = std::clamp (requested,
+            sliceBounds[static_cast<size_t> (movedMarker - 1)] + 32,
+            sliceBounds[static_cast<size_t> (movedMarker + 1)] - 32);
+        displayedSlicePositions[static_cast<size_t> (movedMarker)].store (
+            static_cast<float> (sliceBounds[static_cast<size_t> (movedMarker)]) / activeSample.getNumSamples(), std::memory_order_release);
+    }
     if (regenerateRequested.exchange (false, std::memory_order_acq_rel))
     {
         sequencer.regenerate (static_cast<uint32_t> (parameters.getRawParameterValue (ids::seed)->load()), parameters.getRawParameterValue (ids::chaos)->load());
@@ -102,14 +123,8 @@ void ScraperAudioProcessor::processBlock (juce::AudioBuffer<float>& out, juce::M
     auto renderOne = [&] (int frame)
     {
         const int64_t absoluteStep = static_cast<int64_t> (std::floor ((ppq0 + frame * ppqPerSample) * 4.0));
-        auto event = parameters.getRawParameterValue (ids::sequence)->load() >= 0.5f ? sequencer.advanceTo (absoluteStep) : scraper::Trigger{};
-        if (event.fired && globalProbability > 0.0f)
-        {
-            // Avoid a second PRNG and keep the sequence repeatable. The global
-            // control acts as a deterministic density gate across the 16 steps.
-            const auto phase = static_cast<float> ((absoluteStep % 16 + 16) % 16) / 15.0f;
-            if (phase <= globalProbability) trigger (event.step);
-        }
+        auto event = sequenceEnabled ? sequencer.advanceTo (absoluteStep, globalProbability) : scraper::Trigger{};
+        if (event.fired) trigger (event.step);
         if (! playing) return;
         const int i = static_cast<int> (playhead), j = std::clamp (i + (increment >= 0.0 ? 1 : -1), playStart, playEnd - 1);
         const float frac = static_cast<float> (std::abs (playhead - i));
@@ -178,8 +193,15 @@ std::array<float, 256> ScraperAudioProcessor::getWaveformPreview() const
 }
 std::array<float, 17> ScraperAudioProcessor::getSlicePreview() const
 {
-    const juce::ScopedLock lock (previewLock);
-    return slicePreview;
+    std::array<float, 17> result {};
+    for (size_t i = 0; i < result.size(); ++i) result[i] = displayedSlicePositions[i].load (std::memory_order_acquire);
+    return result;
+}
+
+void ScraperAudioProcessor::requestSliceMove (int marker, float normalisedPosition) noexcept
+{
+    sliceMovePosition.store (juce::jlimit (0.0f, 1.0f, normalisedPosition), std::memory_order_release);
+    sliceMoveIndex.store (marker, std::memory_order_release);
 }
 void ScraperAudioProcessor::getStateInformation (juce::MemoryBlock& b) { if (auto xml = parameters.copyState().createXml()) copyXmlToBinary (*xml, b); }
 void ScraperAudioProcessor::setStateInformation (const void* d, int n) { if (auto xml = getXmlFromBinary (d, n)) parameters.replaceState (juce::ValueTree::fromXml (*xml)); }

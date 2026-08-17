@@ -11,6 +11,8 @@ ScraperAudioProcessorEditor::ScraperAudioProcessorEditor (ScraperAudioProcessor&
     }
     pitch.setName ("PITCH"); stretch.setName ("STRETCH"); probability.setName ("DENSITY"); chaos.setName ("CHAOS");
     sequence.setClickingTogglesState (true);
+    sequence.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff25252a));
+    sequence.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8aaa22));
     sequenceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.parameters, "sequence", sequence);
     pitchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.parameters, "pitch", pitch);
     stretchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.parameters, "stretch", stretch);
@@ -26,6 +28,34 @@ ScraperAudioProcessorEditor::ScraperAudioProcessorEditor (ScraperAudioProcessor&
     };
     startTimerHz (20);
     setSize (760, 460);
+}
+
+void ScraperAudioProcessorEditor::timerCallback()
+{
+    sequence.setButtonText (sequence.getToggleState() ? "SEQ ON" : "SEQ OFF");
+    repaint();
+}
+
+void ScraperAudioProcessorEditor::mouseDown (const juce::MouseEvent& event)
+{
+    draggedMarker = -1;
+    const juce::Rectangle<float> waveArea (24.0f, 86.0f, 712.0f, 116.0f);
+    if (! waveArea.contains (event.position)) return;
+    const auto slices = processor.getSlicePreview();
+    float bestDistance = 10.0f;
+    for (int i = 1; i < 16; ++i)
+    {
+        const float x = waveArea.getX() + waveArea.getWidth() * slices[static_cast<size_t> (i)];
+        const float distance = std::abs (event.position.x - x);
+        if (distance < bestDistance) { bestDistance = distance; draggedMarker = i; }
+    }
+}
+
+void ScraperAudioProcessorEditor::mouseDrag (const juce::MouseEvent& event)
+{
+    if (draggedMarker < 1) return;
+    constexpr float left = 24.0f, width = 712.0f;
+    processor.requestSliceMove (draggedMarker, (event.position.x - left) / width);
 }
 
 void ScraperAudioProcessorEditor::paint (juce::Graphics& g)

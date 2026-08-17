@@ -8,8 +8,10 @@ public:
     explicit ScraperAudioProcessorEditor (ScraperAudioProcessor&);
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
 private:
-    void timerCallback() override { repaint(); }
+    void timerCallback() override;
     ScraperAudioProcessor& processor;
     juce::TextButton load { "LOAD SAMPLE" };
     juce::TextButton sequence { "SEQ" }, regenerate { "REGENERATE" }, mutate { "MUTATE" };
@@ -17,5 +19,6 @@ private:
     juce::Slider pitch, stretch, probability, chaos;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> sequenceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchAttachment, stretchAttachment, probabilityAttachment, chaosAttachment;
+    int draggedMarker = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScraperAudioProcessorEditor)
 };

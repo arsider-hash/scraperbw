@@ -1,4 +1,4 @@
-# SCRAPER 0.2
+# SCRAPER 0.2.1
 
 Lightweight JUCE/VST3 instrument for Bitwig 6: transient slicing, a 16-step
 probability sequencer and destructive single-voice sample playback.

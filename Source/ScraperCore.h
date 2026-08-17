@@ -47,13 +47,15 @@ public:
     std::array<Step, numSteps>& pattern() noexcept { return steps; }
     const std::array<Step, numSteps>& pattern() const noexcept { return steps; }
 
-    Trigger advanceTo (int64_t absoluteStep) noexcept
+    Trigger advanceTo (int64_t absoluteStep, float density = 1.0f) noexcept
     {
         if (absoluteStep == lastAbsoluteStep) return {};
         lastAbsoluteStep = absoluteStep;
         currentStep = static_cast<int> ((absoluteStep % numSteps + numSteps) % numSteps);
         const auto s = steps[static_cast<size_t> (currentStep)];
-        return { random.hit (s.probability), s };
+        density = std::clamp (density, 0.0f, 1.0f);
+        const auto effectiveProbability = static_cast<uint8_t> (std::lround (static_cast<float> (s.probability) * density));
+        return { density > 0.0f && random.hit (effectiveProbability), s };
     }
 
     void regenerate (uint32_t seed, float chaos) noexcept
