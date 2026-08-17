@@ -27,12 +27,19 @@ public:
     void setStateInformation (const void*, int) override;
 
     void loadFileAsync (const juce::File&);
+    void requestRegenerate() noexcept { regenerateRequested.store (true, std::memory_order_release); }
+    void requestMutate() noexcept { mutateRequested.store (true, std::memory_order_release); }
+    std::array<float, 256> getWaveformPreview() const;
+    std::array<float, 17> getSlicePreview() const;
+    uint32_t getPackedStep (int index) const noexcept { return displayedSteps[static_cast<size_t> (juce::jlimit (0, 15, index))].load(); }
     juce::AudioProcessorValueTreeState parameters;
     juce::String getLoadedName() const;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout makeLayout();
     void trigger (const scraper::Step&) noexcept;
+    void refreshPlaybackRate() noexcept;
+    void publishPattern() noexcept;
     void publishPendingSample() noexcept;
 
     juce::AudioFormatManager formats;
@@ -43,12 +50,18 @@ private:
     std::array<int, 17> pendingBounds {};
     std::atomic<bool> pendingReady { false };
     juce::String loadedName;
+    mutable juce::CriticalSection previewLock;
+    std::array<float, 256> waveformPreview {};
+    std::array<float, 17> slicePreview {};
     juce::ThreadPool loader { 1 };
     scraper::Sequencer sequencer;
+    std::array<std::atomic<uint32_t>, 16> displayedSteps {};
+    std::atomic<bool> regenerateRequested { false }, mutateRequested { false };
     double sampleRate = 44100.0;
     double playhead = 0.0, increment = 1.0;
+    float activeStepPitch = 0.0f;
+    bool playbackReverse = false;
     int playStart = 0, playEnd = 0, repeatsLeft = 0;
     bool playing = false;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ScraperAudioProcessor)
 };
-

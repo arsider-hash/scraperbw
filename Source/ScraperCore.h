@@ -70,6 +70,24 @@ public:
         }
     }
 
+    void mutate (uint32_t seed, float amount) noexcept
+    {
+        FastRandom r; r.seed (seed);
+        amount = std::clamp (amount, 0.0f, 1.0f);
+        for (auto& s : steps)
+        {
+            if ((r.next() & 0xffffu) >= static_cast<uint32_t> (amount * 65535.0f)) continue;
+            switch (r.next() % 5u)
+            {
+                case 0: s.slice = static_cast<uint8_t> (r.next() % numSlices); break;
+                case 1: s.probability = static_cast<uint8_t> (96u + r.next() % 160u); break;
+                case 2: s.repeats = static_cast<uint8_t> (1u + r.next() % 4u); break;
+                case 3: s.pitchSemitones = static_cast<int8_t> (static_cast<int> (r.next() % 25u) - 12); break;
+                default: s.reverse = ! s.reverse; break;
+            }
+        }
+    }
+
 private:
     std::array<Step, numSteps> steps {};
     FastRandom random;
@@ -83,4 +101,3 @@ inline double semitonesToRatio (float semitones) noexcept
     return std::exp2 (static_cast<double> (semitones) / 12.0);
 }
 }
-

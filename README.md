@@ -1,4 +1,4 @@
-# SCRAPER V1
+# SCRAPER 0.2
 
 Lightweight JUCE/VST3 instrument for Bitwig 6: transient slicing, a 16-step
 probability sequencer and destructive single-voice sample playback.
@@ -16,9 +16,10 @@ probability sequencer and destructive single-voice sample playback.
 - UI: deliberately minimal; host automation/MIDI mapping is the primary
   control surface.
 
-Granular playback and folder browsing UI are the next vertical slice. The
-parameter/state model already reserves the eight macros used by a DualSense
-MIDI bridge.
+This build adds immediate pitch response, ONE SHOT/SEQ switching, waveform
+preview, pattern overview and live-safe mutate/regenerate requests. Granular
+playback remains the next vertical slice. The parameter/state model already
+reserves the eight macros used by a DualSense MIDI bridge.
 
 ## Windows build
 
