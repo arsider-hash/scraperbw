@@ -1,0 +1,34 @@
+name: Build SCRAPER VST3 Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Configure Release build
+        run: cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target Scraper_VST3 --parallel 2
+
+      - name: Package VST3
+        shell: pwsh
+        run: Compress-Archive -Path "build/Scraper_artefacts/Release/VST3/SCRAPER.vst3" -DestinationPath "SCRAPER-Windows-VST3.zip"
+
+      - name: Upload downloadable plug-in
+        uses: actions/upload-artifact@v4
+        with:
+          name: SCRAPER-Windows-VST3
+          path: SCRAPER-Windows-VST3.zip
+          if-no-files-found: error
+          retention-days: 30
